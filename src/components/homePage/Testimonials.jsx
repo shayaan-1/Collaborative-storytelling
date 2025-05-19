@@ -14,12 +14,12 @@ export default function Testimonials() {
       role: "Fantasy Author"
     },
     {
-      quote: "The platform's intuitive design makes storytelling accessible for everyone. I've connected with amazing writers who've helped me grow.",
+      quote: "The platform's intuitive design makes storytelling accessible for everyone.I've connected with amazing writers too.",
       author: "Thomas L.",
       role: "Screenwriter"
     },
     {
-      quote: "As a writing teacher. The real-time feedback and collaboration tools are game-changers for education.",
+      quote: "As a writing teacher. The real-time feedback and collaboration tools are game-changers for education. Absolutely loved it",
       author: "Dr. Sarah P.",
       role: "Writing Instructor"
     }
