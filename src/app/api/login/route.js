@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 export async function POST(req) {
   const { email, password } = await req.json();
 
-  // Login using Supabase Auth
   const { data, error } = await supabaseAdmin.auth.signInWithPassword({
     email,
     password,
@@ -14,7 +13,6 @@ export async function POST(req) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  // Get user profile info (role, username, etc)
   const { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
     .select('username, admin')
@@ -25,7 +23,8 @@ export async function POST(req) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  return NextResponse.json({
+  // Set the access token in an HTTP-only cookie
+  const response = NextResponse.json({
     message: 'Login successful',
     user: {
       id: data.user.id,
@@ -33,6 +32,15 @@ export async function POST(req) {
       username: profile.username,
       admin: profile.admin,
     },
-    session: data.session,
   });
+
+  response.cookies.set('access_token', data.session.access_token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+
+  return response;
 }
