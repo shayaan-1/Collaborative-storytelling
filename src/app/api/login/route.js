@@ -24,15 +24,19 @@ export async function POST(req) {
   }
 
   // Set the access token in an HTTP-only cookie
-  const response = NextResponse.json({
-    message: 'Login successful',
-    user: {
-      id: data.user.id,
-      email: data.user.email,
-      username: profile.username,
-      admin: profile.admin,
-    },
-  });
+  const response = NextResponse.json(
+      {
+        success: true,
+        message: 'Login successful',
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          username: profile.username,
+          admin: profile.admin,
+        },
+      },
+      { status: 200 }
+    );
 
   response.cookies.set('access_token', data.session.access_token, {
     httpOnly: true,

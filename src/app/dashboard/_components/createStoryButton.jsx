@@ -9,7 +9,7 @@ export function CreateStoryButton() {
   
   return (
     <Button 
-      onClick={() => router.push('/dashboard/stories/new')}
+      onClick={() => router.push('/dashboard/newStory')}
       className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md transition-all hover:shadow-lg"
     >
       <PlusCircle className="mr-2 h-4 w-4" />
