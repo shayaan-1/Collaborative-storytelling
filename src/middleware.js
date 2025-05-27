@@ -20,5 +20,5 @@ export function middleware(request) {
 
 // Apply to all routes or specific ones
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/createStory'],
 };
