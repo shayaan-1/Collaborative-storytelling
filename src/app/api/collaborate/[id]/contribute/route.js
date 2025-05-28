@@ -1,26 +1,14 @@
-// File: api/collaborate/[id]/contribute/route.js
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 
 export async function POST(request, { params }) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('access_token')?.value
-    
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const token = cookies().get('access_token')?.value
+    const { user, error: authError } = await getUserFromToken(token)
 
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const storyId = params.id
@@ -34,8 +22,8 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Content too long (max 1000 characters)' }, { status: 400 })
     }
 
-    // Check if user is a participant
-    const { data: participant } = await supabase
+    // Check participant
+    const { data: participant } = await supabaseAdmin
       .from('story_participants')
       .select('*')
       .eq('story_id', storyId)
@@ -46,8 +34,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Must be a participant to contribute' }, { status: 403 })
     }
 
-    // Add contribution
-    const { data: contribution, error: contributionError } = await supabase
+    const { data: contribution, error: contributionError } = await supabaseAdmin
       .from('story_contributions')
       .insert({
         story_id: storyId,

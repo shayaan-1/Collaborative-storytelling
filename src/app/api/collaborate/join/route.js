@@ -1,26 +1,14 @@
-// File: api/collaborate/join/route.js
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 import { cookies } from 'next/headers'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 export async function POST(request) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('access_token')?.value
-    
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const token = cookies().get('access_token')?.value
+    const { user, error: authError } = await getUserFromToken(token)
 
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { room_code } = await request.json()
@@ -29,8 +17,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Room code is required' }, { status: 400 })
     }
 
-    // Find story by room code
-    const { data: story, error: storyError } = await supabase
+    const { data: story, error: storyError } = await supabaseAdmin
       .from('collaborative_stories')
       .select('*')
       .eq('room_code', room_code.trim().toUpperCase())
@@ -40,8 +27,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid room code' }, { status: 404 })
     }
 
-    // Check if user is already a participant
-    const { data: existingParticipant } = await supabase
+    const { data: existingParticipant } = await supabaseAdmin
       .from('story_participants')
       .select('id')
       .eq('story_id', story.id)
@@ -49,15 +35,14 @@ export async function POST(request) {
       .single()
 
     if (existingParticipant) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         story_id: story.id,
         message: 'Already joined this story'
       })
     }
 
-    // Check participant limit
     if (story.max_participants) {
-      const { count } = await supabase
+      const { count } = await supabaseAdmin
         .from('story_participants')
         .select('*', { count: 'exact', head: true })
         .eq('story_id', story.id)
@@ -67,8 +52,7 @@ export async function POST(request) {
       }
     }
 
-    // Add user as participant
-    const { error: participantError } = await supabase
+    const { error: participantError } = await supabaseAdmin
       .from('story_participants')
       .insert({
         story_id: story.id,
@@ -81,7 +65,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Failed to join story' }, { status: 500 })
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       story_id: story.id,
       message: 'Successfully joined story'
     })

@@ -1,36 +1,19 @@
-// File: api/collaborate/create/route.js
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 import { cookies } from 'next/headers'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
-// Generate unique room code
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let result = ''
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
+  return Array.from({ length: 8 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('')
 }
 
 export async function POST(request) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('access_token')?.value
-    
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const token = cookies().get('access_token')?.value
+    const { user, error: authError } = await getUserFromToken(token)
 
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { title, description, isPublic, maxParticipants } = await request.json()
@@ -39,19 +22,16 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    // Generate unique room code
-    let roomCode
-    let isUnique = false
-    let attempts = 0
-    
+    let roomCode, isUnique = false, attempts = 0
+
     while (!isUnique && attempts < 10) {
       roomCode = generateRoomCode()
-      const { data: existing } = await supabase
+      const { data: existing } = await supabaseAdmin
         .from('collaborative_stories')
         .select('id')
         .eq('room_code', roomCode)
         .single()
-      
+
       if (!existing) isUnique = true
       attempts++
     }
@@ -60,8 +40,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Failed to generate unique room code' }, { status: 500 })
     }
 
-    // Create the story
-    const { data: story, error: storyError } = await supabase
+    const { data: story, error: storyError } = await supabaseAdmin
       .from('collaborative_stories')
       .insert({
         title: title.trim(),
@@ -79,8 +58,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Failed to create story' }, { status: 500 })
     }
 
-    // Add creator as first participant
-    const { error: participantError } = await supabase
+    const { error: participantError } = await supabaseAdmin
       .from('story_participants')
       .insert({
         story_id: story.id,
@@ -90,7 +68,6 @@ export async function POST(request) {
 
     if (participantError) {
       console.error('Participant creation error:', participantError)
-      // Don't fail the whole request, just log the error
     }
 
     return NextResponse.json(story)

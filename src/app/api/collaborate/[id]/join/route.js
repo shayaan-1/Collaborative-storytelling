@@ -1,32 +1,19 @@
-// File: api/collaborate/[id]/join/route.js
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 
 export async function POST(request, { params }) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('access_token')?.value
-    
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const token = cookies().get('access_token')?.value
+    const { user, error: authError } = await getUserFromToken(token)
 
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const storyId = params.id
 
-    // Get story details
-    const { data: story, error: storyError } = await supabase
+    const { data: story, error: storyError } = await supabaseAdmin
       .from('collaborative_stories')
       .select('*')
       .eq('id', storyId)
@@ -36,8 +23,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Story not found' }, { status: 404 })
     }
 
-    // Check if user is already a participant
-    const { data: existingParticipant } = await supabase
+    const { data: existingParticipant } = await supabaseAdmin
       .from('story_participants')
       .select('id')
       .eq('story_id', storyId)
@@ -48,9 +34,8 @@ export async function POST(request, { params }) {
       return NextResponse.json({ message: 'Already joined this story' })
     }
 
-    // Check participant limit
     if (story.max_participants) {
-      const { count } = await supabase
+      const { count } = await supabaseAdmin
         .from('story_participants')
         .select('*', { count: 'exact', head: true })
         .eq('story_id', storyId)
@@ -60,8 +45,7 @@ export async function POST(request, { params }) {
       }
     }
 
-    // Add user as participant
-    const { error: participantError } = await supabase
+    const { error: participantError } = await supabaseAdmin
       .from('story_participants')
       .insert({
         story_id: storyId,

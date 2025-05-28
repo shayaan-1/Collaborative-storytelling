@@ -1,30 +1,17 @@
-// File: api/collaborate/stories/route.js
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 import { cookies } from 'next/headers'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 export async function GET() {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('access_token')?.value
-    
-    if (!token) {
+    const token = cookies().get('access_token')?.value
+    const { user, error: authError } = await getUserFromToken(token)
+
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
-
-    // Get public collaborative stories with participant counts
-    const { data: stories, error } = await supabase
+    const { data: stories, error } = await supabaseAdmin
       .from('collaborative_stories')
       .select(`
         *,
@@ -39,7 +26,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch stories' }, { status: 500 })
     }
 
-    // Format the response
     const formattedStories = stories.map(story => ({
       ...story,
       participants: story.participants || [],

@@ -1,32 +1,19 @@
-// File: api/collaborate/[id]/route.js
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 import { cookies } from 'next/headers'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 export async function GET(request, { params }) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('access_token')?.value
-    
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const token = cookies().get('access_token')?.value
+    const { user, error: authError } = await getUserFromToken(token)
 
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const storyId = params.id
 
-    // Get story details
-    const { data: story, error: storyError } = await supabase
+    const { data: story, error: storyError } = await supabaseAdmin
       .from('collaborative_stories')
       .select('*')
       .eq('id', storyId)
@@ -36,8 +23,8 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Story not found' }, { status: 404 })
     }
 
-    // Check if user is a participant
-    const { data: participant } = await supabase
+    // Check if user is a participant or story is public
+    const { data: participant } = await supabaseAdmin
       .from('story_participants')
       .select('*')
       .eq('story_id', storyId)
@@ -48,8 +35,8 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Get participants with user details
-    const { data: participants, error: participantsError } = await supabase
+    // Fetch participants with user info
+    const { data: participants, error: participantsError } = await supabaseAdmin
       .from('story_participants')
       .select(`
         *,
@@ -61,8 +48,8 @@ export async function GET(request, { params }) {
       console.error('Participants fetch error:', participantsError)
     }
 
-    // Get contributions with author details
-    const { data: contributions, error: contributionsError } = await supabase
+    // Fetch contributions with author info
+    const { data: contributions, error: contributionsError } = await supabaseAdmin
       .from('story_contributions')
       .select(`
         *,
@@ -75,7 +62,7 @@ export async function GET(request, { params }) {
       console.error('Contributions fetch error:', contributionsError)
     }
 
-    // Format the response
+    // Format response
     const storyDetails = {
       ...story,
       participants: (participants || []).map(p => ({
