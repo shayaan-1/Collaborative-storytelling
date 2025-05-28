@@ -1,4 +1,4 @@
-// File: lib/api.js
+// File: lib/api.js (Updated)
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -94,12 +94,16 @@ export async function joinStoryRoom(storyId) {
   }
 }
 
+
 export async function getStoryDetails(storyId) {
   try {
     const response = await fetch(`/api/collaborate/${storyId}`, {
       headers: getAuthHeaders()
     })
-    if (!response.ok) throw new Error('Failed to fetch story details')
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to fetch story details')
+    }
     return await response.json()
   } catch (error) {
     console.error('Error fetching story details:', error)
@@ -112,12 +116,14 @@ export async function addStoryContribution(storyId, content) {
     const response = await fetch(`/api/collaborate/${storyId}/contribute`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ content })
     })
-    if (!response.ok) throw new Error('Failed to add contribution')
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to add contribution')
+    }
     return await response.json()
   } catch (error) {
     console.error('Error adding story contribution:', error)
@@ -133,9 +139,21 @@ export function subscribeToStoryUpdates(storyId, callbacks) {
       schema: 'public',
       table: 'story_contributions',
       filter: `story_id=eq.${storyId}`
-    }, (payload) => {
+    }, async (payload) => {
       if (callbacks.onContribution) {
-        callbacks.onContribution(payload.new)
+        // Fetch the user profile for the new contribution
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, display_name')
+          .eq('id', payload.new.user_id)
+          .single()
+        
+        const contributionWithAuthor = {
+          ...payload.new,
+          author_name: profile?.display_name || profile?.username || 'Anonymous Writer'
+        }
+        
+        callbacks.onContribution(contributionWithAuthor)
       }
     })
     .on('postgres_changes', {
@@ -143,9 +161,21 @@ export function subscribeToStoryUpdates(storyId, callbacks) {
       schema: 'public', 
       table: 'story_participants',
       filter: `story_id=eq.${storyId}`
-    }, (payload) => {
+    }, async (payload) => {
       if (callbacks.onParticipantJoin) {
-        callbacks.onParticipantJoin(payload.new)
+        // Fetch the user profile for the new participant
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, display_name')
+          .eq('id', payload.new.user_id)
+          .single()
+        
+        const participantWithName = {
+          ...payload.new,
+          name: profile?.display_name || profile?.username || 'Anonymous Writer'
+        }
+        
+        callbacks.onParticipantJoin(participantWithName)
       }
     })
     .on('postgres_changes', {

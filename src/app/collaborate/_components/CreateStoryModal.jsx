@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Loader2, Sparkles } from 'lucide-react'
-import { createCollaborativeStory } from '@/lib/api'
+import { createCollaborativeStory } from '@/lib/liveStory'
 
 export default function CreateStoryModal({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState({

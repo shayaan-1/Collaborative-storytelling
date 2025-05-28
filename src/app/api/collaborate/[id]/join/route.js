@@ -1,8 +1,9 @@
+// File: app/api/collaborate/[id]/route.js
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { supabaseAdmin, getUserFromToken } from '@/lib/supabaseAdmin'
 
-export async function POST(request, { params }) {
+export async function GET(request, { params }) {
   try {
     const token = cookies().get('access_token')?.value
     const { user, error: authError } = await getUserFromToken(token)
@@ -11,8 +12,21 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const storyId = params.id
+    const storyId = await params.id
 
+    // Check if user is a participant in this story
+    const { data: participant } = await supabaseAdmin
+      .from('story_participants')
+      .select('id')
+      .eq('story_id', storyId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!participant) {
+      return NextResponse.json({ error: 'Access denied. You are not a participant in this story.' }, { status: 403 })
+    }
+
+    // Get story details
     const { data: story, error: storyError } = await supabaseAdmin
       .from('collaborative_stories')
       .select('*')
@@ -23,42 +37,69 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Story not found' }, { status: 404 })
     }
 
-    const { data: existingParticipant } = await supabaseAdmin
+    // Get all participants with their profile information
+    const { data: participants, error: participantsError } = await supabaseAdmin
       .from('story_participants')
-      .select('id')
+      .select(`
+        id,
+        user_id,
+        is_creator,
+        joined_at,
+        profiles!fk_user (
+          username
+        )
+      `)
       .eq('story_id', storyId)
-      .eq('user_id', user.id)
-      .single()
+      .order('joined_at', { ascending: true })
 
-    if (existingParticipant) {
-      return NextResponse.json({ message: 'Already joined this story' })
+    if (participantsError) {
+      console.error('Error fetching participants:', participantsError)
     }
 
-    if (story.max_participants) {
-      const { count } = await supabaseAdmin
-        .from('story_participants')
-        .select('*', { count: 'exact', head: true })
-        .eq('story_id', storyId)
+    // Transform participants data to include name
+    const transformedParticipants = participants?.map(p => ({
+      id: p.id,
+      user_id: p.user_id,
+      is_creator: p.is_creator,
+      joined_at: p.joined_at,
+      name: p.profiles?.display_name || p.profiles?.username || 'Anonymous Writer'
+    })) || []
 
-      if (count >= story.max_participants) {
-        return NextResponse.json({ error: 'Story room is full' }, { status: 400 })
-      }
+    // Get all story contributions with author information
+    const { data: contributions, error: contributionsError } = await supabaseAdmin
+      .from('story_contributions')
+      .select(`
+        id,
+        content,
+        created_at,
+        user_id,
+        profiles!fk_user (
+          username
+        )
+      `)
+      .eq('story_id', storyId)
+      .order('created_at', { ascending: true })
+
+    if (contributionsError) {
+      console.error('Error fetching contributions:', contributionsError)
     }
 
-    const { error: participantError } = await supabaseAdmin
-      .from('story_participants')
-      .insert({
-        story_id: storyId,
-        user_id: user.id,
-        is_creator: false
-      })
+    // Transform contributions data to include author name
+    const transformedContributions = contributions?.map(c => ({
+      id: c.id,
+      content: c.content,
+      created_at: c.created_at,
+      user_id: c.user_id,
+      author_name: c.profiles?.display_name || c.profiles?.username || 'Anonymous Writer'
+    })) || []
 
-    if (participantError) {
-      console.error('Participant join error:', participantError)
-      return NextResponse.json({ error: 'Failed to join story' }, { status: 500 })
-    }
+    // Return complete story data
+    return NextResponse.json({
+      ...story,
+      participants: transformedParticipants,
+      contributions: transformedContributions
+    })
 
-    return NextResponse.json({ message: 'Successfully joined story' })
   } catch (error) {
     console.error('Server error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

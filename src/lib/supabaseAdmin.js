@@ -8,6 +8,6 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 export async function getUserFromToken(token) {
   if (!token) return { user: null, error: 'No token provided' }
-  const { data: { user }, error } = await supabase.auth.getUser(token)
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
   return { user, error }
 }

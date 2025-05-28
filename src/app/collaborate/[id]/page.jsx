@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { getStoryDetails, addStoryContribution, subscribeToStoryUpdates } from '@/lib/api'
+import { getStoryDetails, addStoryContribution, subscribeToStoryUpdates } from '@/lib/liveStory'
 
 export default function StoryRoomPage() {
   const params = useParams()
@@ -21,6 +21,7 @@ export default function StoryRoomPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
   const textareaRef = useRef(null)
   const contributionsEndRef = useRef(null)
 
@@ -34,10 +35,36 @@ export default function StoryRoomPage() {
     scrollToBottom()
   }, [contributions])
 
+  // Get current user info from token
+  const getCurrentUser = () => {
+    if (typeof window !== 'undefined') {
+      const token = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('access_token='))
+        ?.split('=')[1]
+      console.log('Token:', token)
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          return { id: payload.sub, email: payload.email }
+        } catch (error) {
+          console.error('Error parsing token:', error)
+        }
+      }
+    }
+    return null
+  }
+
   const initializeStoryRoom = async () => {
     try {
+      // Get current user
+      const user = getCurrentUser()
+      console.log(user)
+      setCurrentUser(user)
+
       const storyData = await getStoryDetails(params.id)
       setStory(storyData)
+      console.log(storyData)
       setParticipants(storyData.participants || [])
       setContributions(storyData.contributions || [])
       
@@ -47,10 +74,17 @@ export default function StoryRoomPage() {
           setContributions(prev => [...prev, contribution])
         },
         onParticipantJoin: (participant) => {
-          setParticipants(prev => [...prev, participant])
+          setParticipants(prev => {
+            // Check if participant already exists
+            const exists = prev.some(p => p.user_id === participant.user_id)
+            if (!exists) {
+              return [...prev, participant]
+            }
+            return prev
+          })
         },
-        onParticipantLeave: (participantId) => {
-          setParticipants(prev => prev.filter(p => p.id !== participantId))
+        onParticipantLeave: (participantUserId) => {
+          setParticipants(prev => prev.filter(p => p.user_id !== participantUserId))
         }
       })
 
@@ -69,20 +103,27 @@ export default function StoryRoomPage() {
 
     setSending(true)
     try {
-      await addStoryContribution(params.id, content.trim())
+      const newContribution = await addStoryContribution(params.id, content.trim())
+      // Don't add to local state here - let real-time updates handle it
       setContent('')
       textareaRef.current?.focus()
     } catch (error) {
       console.error('Error adding contribution:', error)
+      // Show error to user
+      alert('Failed to add contribution. Please try again.')
     } finally {
       setSending(false)
     }
   }
 
   const copyRoomCode = async () => {
-    await navigator.clipboard.writeText(story.room_code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(story.room_code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy room code:', error)
+    }
   }
 
   const scrollToBottom = () => {
@@ -94,6 +135,13 @@ export default function StoryRoomPage() {
       e.preventDefault()
       handleSubmit(e)
     }
+  }
+
+  // Get current user's name from participants
+  const getCurrentUserName = () => {
+    if (!currentUser || !participants.length) return 'You'
+    const currentParticipant = participants.find(p => p.user_id === currentUser.id)
+    return currentParticipant?.name || 'You'
   }
 
   if (loading) {
@@ -155,7 +203,7 @@ export default function StoryRoomPage() {
                 </Button>
               </div>
               <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                {participants.length} writers active
+                {participants.length} {participants.length === 1 ? 'writer' : 'writers'} active
               </Badge>
             </div>
           </div>
@@ -170,21 +218,30 @@ export default function StoryRoomPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-2 max-h-32 overflow-y-auto">
-                {participants.map((participant, index) => (
-                  <div key={participant.id || index} className="flex items-center gap-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-purple-100 text-purple-600 text-xs">
-                        {participant.name?.charAt(0)?.toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-medium text-gray-700">
-                      {participant.name || 'Anonymous Writer'}
-                    </span>
-                    {participant.is_creator && (
-                      <Crown className="h-4 w-4 text-yellow-500" />
-                    )}
+                {participants.length === 0 ? (
+                  <div className="text-sm text-gray-500 text-center py-2">
+                    Loading participants...
                   </div>
-                ))}
+                ) : (
+                  participants.map((participant, index) => (
+                    <div key={participant.user_id || index} className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-purple-100 text-purple-600 text-xs">
+                          {participant.name?.charAt(0)?.toUpperCase() || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium text-gray-700">
+                        {currentUser && participant.user_id === currentUser.id 
+                          ? `${participant.name || 'You'} (You)` 
+                          : (participant.name || 'Anonymous Writer')
+                        }
+                      </span>
+                      {participant.is_creator && (
+                        <Crown className="h-4 w-4 text-yellow-500" />
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -221,7 +278,10 @@ export default function StoryRoomPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-medium text-gray-700">
-                                {contribution.author_name || 'Anonymous'}
+                                {currentUser && contribution.user_id === currentUser.id 
+                                  ? 'You' 
+                                  : (contribution.author_name || 'Anonymous')
+                                }
                               </span>
                               <span className="text-xs text-gray-500">
                                 {new Date(contribution.created_at).toLocaleTimeString()}

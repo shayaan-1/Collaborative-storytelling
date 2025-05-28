@@ -6,9 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
-import { getCollaborativeStories, joinStoryRoom } from '@/lib/api'
-import CreateStoryModal from './components/CreateStoryModal'
-import JoinStoryModal from './components/JoinStoryModal'
+import { getCollaborativeStories, joinStoryRoom } from '@/lib/liveStory'
+import CreateStoryModal from './_components/CreateStoryModal'
+import JoinStoryModal from './_components/JoinStoryModal'
 
 export default function CollaboratePage() {
   const [stories, setStories] = useState([])

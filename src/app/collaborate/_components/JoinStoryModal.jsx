@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, Key } from 'lucide-react'
-import { joinStoryByCode } from '@/lib/api'
+import { joinStoryByCode } from '@/lib/liveStory'
 
 export default function JoinStoryModal({ isOpen, onClose, onSuccess }) {
   const [roomCode, setRoomCode] = useState('')

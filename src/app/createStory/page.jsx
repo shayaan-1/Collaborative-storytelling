@@ -29,9 +29,6 @@ export default function CreateStoryPage() {
   };
 
 
-
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
